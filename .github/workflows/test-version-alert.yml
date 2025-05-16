@@ -9,23 +9,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # Read version.ts into temp file
       - name: Read version.ts
         id: read_version
         run: |
-          sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts > version.txt
-          echo "file_content<<EOF" >> $GITHUB_OUTPUT
-          cat version.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          content=$(sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts | base64 -w0)
+          echo "file_content=$content" >> $GITHUB_OUTPUT
 
-      # Read amplitude-snippet.js into temp file
       - name: Read amplitude-snippet.js
         id: read_snippet
         run: |
-          sed -e 's/```/` ` `/g' packages/analytics-browser/generated/amplitude-snippet.js > snippet.txt
-          echo "snippet_content<<EOF" >> $GITHUB_OUTPUT
-          cat snippet.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          content=$(sed -e 's/```/` ` `/g' packages/analytics-browser/generated/amplitude-snippet.js | base64 -w0)
+          echo "snippet_content=$content" >> $GITHUB_OUTPUT
 
       # Send Slack notification
       - name: Send Slack notification
@@ -35,9 +29,9 @@ jobs:
           fields: custom
           custom_payload: |
             {
-              "text": ":package: *version.ts* contents (manual test):\n" +
+              "text": ":package: *version.ts* (base64 decoded):\n" +
                       "```${{ steps.read_version.outputs.file_content }}```\n\n" +
-                      ":bookmark_tabs: *Updated Snippet (amplitude-snippet.js):*\n" +
+                      ":bookmark_tabs: *Snippet (base64):*\n" +
                       "```${{ steps.read_snippet.outputs.snippet_content }}```"
             }
         env:
