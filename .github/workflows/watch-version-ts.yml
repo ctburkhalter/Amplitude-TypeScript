@@ -5,19 +5,38 @@ on:
     # only runs when that file changes
     paths:
       - 'packages/analytics-browser/src/version.ts'
+  workflow_dispatch:
 
 jobs:
   alert:
     runs-on: ubuntu-latest
     steps:
+      # 1) Checkout the repo so we can read the file
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      # 2) Read version.ts into an output variable
+      - name: Read version.ts
+        id: read_file
+        run: |
+          # Protect against ``` in the file breaking Slack code blocks
+          echo "file_content<<EOF" >> $GITHUB_OUTPUT
+          sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 3) Send the Slack notification
       - name: Send Slack notification
         uses: 8398a7/action-slack@v3
         with:
           status: custom
+          # include whichever fields you like
           fields: repo,commit,message,url
           custom_payload: |
             {
-              "text": ":package: *version.ts* was updated in `amplitude/Amplitude-TypeScript`!\n• Commit: `${{ github.sha }}`\n• <${{ github.event.compare }}|View changes>"
+              "text": ":package: *version.ts* was updated in `amplitude/Amplitude-TypeScript`!\n" +
+                      "• Commit: `${{ github.sha }}`\n" +
+                      "• <${{ github.event.compare }}|View changes>\n\n" +
+                      "*Current contents of version.ts:*\n```${{ steps.read_file.outputs.file_content }}```"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
