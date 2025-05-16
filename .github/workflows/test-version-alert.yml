@@ -1,0 +1,33 @@
+# .github/workflows/test-version-alert.yml
+name: 🤖 Test Version.ts Slack Alert
+
+# Let you trigger it by hand from the Actions tab
+on: workflow_dispatch
+
+jobs:
+  post-version:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Grab the repo
+      - uses: actions/checkout@v3
+
+      # 2) Read the file into an output variable
+      - name: Read version.ts
+        id: read
+        run: |
+          echo "file_content<<EOF" >> $GITHUB_OUTPUT
+          sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 3) Send it to Slack
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: custom
+          custom_payload: |
+            {
+              "text": ":package: *version.ts* current contents (manual test):\n``` \n${{ steps.read.outputs.file_content }}\n```"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
