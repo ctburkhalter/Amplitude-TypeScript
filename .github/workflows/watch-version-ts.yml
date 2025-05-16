@@ -1,0 +1,23 @@
+name: 🛎️ Notify on version.ts change
+
+on:
+  push:
+    # only runs when that file changes
+    paths:
+      - 'packages/analytics-browser/src/version.ts'
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: repo,commit,message,url
+          custom_payload: |
+            {
+              "text": ":package: *version.ts* was updated in `amplitude/Amplitude-TypeScript`!\n• Commit: `${{ github.sha }}`\n• <${{ github.event.compare }}|View changes>"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
