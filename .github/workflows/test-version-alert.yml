@@ -1,4 +1,3 @@
-# .github/workflows/test-version-alert.yml
 name: 🤖 Test Version.ts Slack Alert
 
 on:
@@ -10,6 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      # Read version.ts into temp file
       - name: Read version.ts
         id: read_version
         run: |
@@ -17,7 +17,8 @@ jobs:
           echo "file_content<<EOF" >> $GITHUB_OUTPUT
           cat version.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
+      # Read amplitude-snippet.js into temp file
       - name: Read amplitude-snippet.js
         id: read_snippet
         run: |
@@ -26,6 +27,7 @@ jobs:
           cat snippet.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # Send Slack notification
       - name: Send Slack notification
         uses: 8398a7/action-slack@v3
         with:
