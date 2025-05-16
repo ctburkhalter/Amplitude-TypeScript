@@ -1,8 +1,8 @@
 # .github/workflows/test-version-alert.yml
 name: 🤖 Test Version.ts Slack Alert
 
-# Let you trigger it by hand from the Actions tab
-on: workflow_dispatch
+on:
+  workflow_dispatch
 
 jobs:
   post-version:
@@ -11,15 +11,23 @@ jobs:
       # 1) Grab the repo
       - uses: actions/checkout@v3
 
-      # 2) Read the file into an output variable
+      # 2) Read version.ts into an output variable
       - name: Read version.ts
-        id: read
+        id: read_version
         run: |
           echo "file_content<<EOF" >> $GITHUB_OUTPUT
           sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # 3) Send it to Slack
+      # 3) Read amplitude-snippet.js into another output variable
+      - name: Read amplitude-snippet.js
+        id: read_snippet
+        run: |
+          echo "snippet_content<<EOF" >> $GITHUB_OUTPUT
+          sed -e 's/```/` ` `/g' packages/analytics-browser/generated/amplitude-snippet.js >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 4) Send Slack message with both files included
       - name: Send Slack notification
         uses: 8398a7/action-slack@v3
         with:
@@ -27,7 +35,10 @@ jobs:
           fields: custom
           custom_payload: |
             {
-              "text": ":package: *version.ts* current contents (manual test):\n``` \n${{ steps.read.outputs.file_content }}\n```"
+              "text": ":package: *version.ts* contents (manual test):\n" +
+                      "```${{ steps.read_version.outputs.file_content }}```\n\n" +
+                      ":bookmark_tabs: *Updated Snippet (amplitude-snippet.js):*\n" +
+                      "```${{ steps.read_snippet.outputs.snippet_content }}```"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
