@@ -13,20 +13,18 @@ jobs:
       - name: Read version.ts
         id: read_version
         run: |
-          {
-            echo "file_content<<EOF"
-            sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          delimiter=$(uuidgen)
+          echo "file_content<<$delimiter" >> $GITHUB_OUTPUT
+          sed -e 's/```/` ` `/g' packages/analytics-browser/src/version.ts >> $GITHUB_OUTPUT
+          echo "$delimiter" >> $GITHUB_OUTPUT
 
       - name: Read amplitude-snippet.js
         id: read_snippet
         run: |
-          {
-            echo "snippet_content<<EOF"
-            sed -e 's/```/` ` `/g' packages/analytics-browser/generated/amplitude-snippet.js
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          delimiter=$(uuidgen)
+          echo "snippet_content<<$delimiter" >> $GITHUB_OUTPUT
+          sed -e 's/```/` ` `/g' packages/analytics-browser/generated/amplitude-snippet.js >> $GITHUB_OUTPUT
+          echo "$delimiter" >> $GITHUB_OUTPUT
 
       - name: Send Slack notification
         uses: 8398a7/action-slack@v3
