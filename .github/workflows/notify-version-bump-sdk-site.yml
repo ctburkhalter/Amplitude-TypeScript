@@ -1,0 +1,135 @@
+name: 🛎️ Notify on version.ts bump & deployed SDKs
+
+on:
+  workflow_run:
+    workflows: ["🔄 Sync Fork with Upstream"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  alert:
+    # only run on a successful sync
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Pull down the merged code (we need full history)
+      - name: Check out merged commit
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # 2) Grab the old version (pre-merge HEAD^1)
+      - name: Extract old version
+        id: old_ver
+        run: |
+          git show HEAD^1:packages/analytics-browser/src/version.ts \
+            | grep "VERSION" \
+            | sed -E "s/.*'(.+)';/\1/" > old.txt
+          echo "old_version<<EOF" >> $GITHUB_OUTPUT
+          cat old.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 3) Grab the new version (post-merge HEAD)
+      - name: Extract new version
+        id: new_ver
+        run: |
+          git show HEAD:packages/analytics-browser/src/version.ts \
+            | grep "VERSION" \
+            | sed -E "s/.*'(.+)';/\1/" > new.txt
+          echo "new_version<<EOF" >> $GITHUB_OUTPUT
+          cat new.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 4) Detect if version.ts actually changed
+      - name: Determine if bumped
+        id: vercheck
+        run: |
+          if [ "${{ steps.old_ver.outputs.old_version }}" != "${{ steps.new_ver.outputs.new_version }}" ]; then
+            echo "VERSION_CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "VERSION_CHANGED=false" >> $GITHUB_ENV
+          fi
+
+      # 5) Scrape https://www.ajc.com for analytics-browser-X.Y.Z
+      - name: Fetch deployed SDK version (ajc.com)
+        id: fetch_ajc
+        run: |
+          HTML=$(curl -sfL https://www.ajc.com/)
+          TAG=$(printf '%s\n' "$HTML" \
+            | grep -oE 'analytics-browser-[0-9]+\.[0-9]+\.[0-9]+' \
+            | head -1)
+          VERSION=$(echo "$TAG" | sed 's/^analytics-browser-//')
+          echo "ajc_deployed=$VERSION" >> $GITHUB_OUTPUT
+
+      # 6) Scrape https://www.uatl.com for analytics-browser-X.Y.Z
+      - name: Fetch deployed SDK version (uatl.com)
+        id: fetch_uatl
+        run: |
+          HTML=$(curl -sfL https://www.uatl.com/)
+          TAG=$(printf '%s\n' "$HTML" \
+            | grep -oE 'analytics-browser-[0-9]+\.[0-9]+\.[0-9]+' \
+            | head -1)
+          VERSION=$(echo "$TAG" | sed 's/^analytics-browser-//')
+          echo "uatl_deployed=$VERSION" >> $GITHUB_OUTPUT
+
+      # 7) Compare upstream vs each deployed; flag if either is behind
+      - name: Compare deployed vs upstream
+        id: compare
+        run: |
+          UP="${{ steps.new_ver.outputs.new_version }}"
+          AJC="${{ steps.fetch_ajc.outputs.ajc_deployed }}"
+          UATL="${{ steps.fetch_uatl.outputs.uatl_deployed }}"
+
+          echo "Upstream: $UP"
+          echo "AJC.com : $AJC"
+          echo "UATL.com: $UATL"
+
+          ANY_BEHIND=false
+
+          behind () {
+            # first argument = upstream, second = deployed
+            low=$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)
+            if [ "$low" = "$2" ] && [ "$1" != "$2" ]; then
+              ANY_BEHIND=true
+              echo "• $3 is behind: $2 < $1"
+            fi
+          }
+
+          behind "$UP" "$AJC" "ajc.com"
+          behind "$UP" "$UATL" "uatl.com"
+
+          echo "ANY_BEHIND=$ANY_BEHIND" >> $GITHUB_ENV
+
+      # 8a) Slack: version bump
+      - name: Send version bump notification
+        if: env.VERSION_CHANGED == 'true'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: repo,commit
+          custom_payload: |
+            {
+              "text": ":package: *version.ts* was bumped in `${{ github.repository }}`\n" +
+                      "• from *${{ steps.old_ver.outputs.old_version }}* to *${{ steps.new_ver.outputs.new_version }}*\n" +
+                      "• Commit: `${{ github.event.workflow_run.head_sha }}`"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # 8b) Slack: deployed SDKs out of date
+      - name: Send deployed-SDKs-behind notification
+        if: env.ANY_BEHIND == 'true'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: repo,commit
+          custom_payload: |
+            {
+              "text": ":warning: *One or more deployed SDKs are out of date!* in `${{ github.repository }}`\n" +
+                      "• Upstream version.ts → *${{ steps.new_ver.outputs.new_version }}*\n" +
+                      "• AJC.com loads → *${{ steps.fetch_ajc.outputs.ajc_deployed }}*\n" +
+                      "• UATL.com loads → *${{ steps.fetch_uatl.outputs.uatl_deployed }}*"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
