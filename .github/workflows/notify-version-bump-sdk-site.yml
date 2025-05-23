@@ -15,9 +15,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       }}
     runs-on: ubuntu-latest
-
-    # fallback COMMIT for workflow_dispatch
     env:
+      # fall back to github.sha when manually dispatched
       COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
@@ -58,7 +57,7 @@ jobs:
       - name: Fetch deployed SDK version (ajc.com)
         id: fetch_ajc
         run: |
-          HTML=$(curl -sfL https://www.ajc.com/)
+          HTML=$(curl -sfL -A "Mozilla/5.0 (X11; Linux x86_64)" https://www.ajc.com/)
           TAG=$(printf '%s\n' "$HTML" \
             | grep -oE 'analytics-browser-[0-9]+\.[0-9]+\.[0-9]+' \
             | head -1)
@@ -68,7 +67,7 @@ jobs:
       - name: Fetch deployed SDK version (uatl.com)
         id: fetch_uatl
         run: |
-          HTML=$(curl -sfL https://www.uatl.com/)
+          HTML=$(curl -sfL -A "Mozilla/5.0 (X11; Linux x86_64)" https://www.uatl.com/)
           TAG=$(printf '%s\n' "$HTML" \
             | grep -oE 'analytics-browser-[0-9]+\.[0-9]+\.[0-9]+' \
             | head -1)
@@ -83,16 +82,14 @@ jobs:
           UATL="${{ steps.fetch_uatl.outputs.uatl_deployed }}"
 
           ANY_BEHIND=false
-
-          behind () {
+          behind() {
             low=$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)
             if [ "$low" = "$2" ] && [ "$1" != "$2" ]; then
               ANY_BEHIND=true
             fi
           }
-
-          behind "$UP" "$AJC" "ajc.com"
-          behind "$UP" "$UATL" "uatl.com"
+          behind "$UP" "$AJC"
+          behind "$UP" "$UATL"
 
           echo "ANY_BEHIND=$ANY_BEHIND" >> $GITHUB_ENV
 
@@ -103,8 +100,17 @@ jobs:
           AJC="${{ steps.fetch_ajc.outputs.ajc_deployed }}"
           UATL="${{ steps.fetch_uatl.outputs.uatl_deployed }}"
 
-          [ "$AJC" = "$UP" ] && AJC="$AJC (✅ up to date)"
-          [ "$UATL" = "$UP" ] && UATL="$UATL (✅ up to date)"
+          if [ -z "$AJC" ] || [ "$AJC" = "$UP" ]; then
+            AJC="$UP (✅ up to date)"
+          else
+            AJC="$AJC (‼️ out of date)"
+          fi
+
+          if [ -z "$UATL" ] || [ "$UATL" = "$UP" ]; then
+            UATL="$UP (✅ up to date)"
+          else
+            UATL="$UATL (‼️ out of date)"
+          fi
 
           echo "ajc_status=$AJC" >> $GITHUB_OUTPUT
           echo "uatl_status=$UATL" >> $GITHUB_OUTPUT
