@@ -1,10 +1,9 @@
 name: 🛎️ Notify on version.ts change
 
 on:
-  push:
-    # only runs when that file changes
-    paths:
-      - 'packages/analytics-browser/src/version.ts'
+  workflow_run:
+    workflows: ["🔄 Sync Fork with Upstream"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
